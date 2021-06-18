@@ -1,70 +1,227 @@
-"""
-    VK Peer Scaner (vk-peer-scaner)
-    Description: Scans all your peers in VK, then sends it as message to you in VK.
-"""
-
-# Importing modulse
-import vk_api.longpoll  # Module for working with VK API.
-from vk_api.utils import get_random_id  # Module for getting random_id for sending a message.
-from os import getenv  # Module for getting environment variable.
+# Python VK chats scanner.
+# Small script in the Python programming language,
+# that scans and show you all your chats (conversations, peers) in the social network "Vkontakte".
 
 
-def api_send_message(peer_id, message):
-    API_CONNECTION.method("messages.send", {
-        "random_id": get_random_id(),
-        "peer_id": peer_id,
-        "message": message,
+# Importing modules.
+
+# Other.
+import vk_api
+import vk_api.utils
+
+# Preinstalled.
+import os
+
+# Settings.
+
+# VK API Token (PATH, or token in or block).
+VK_API_TOKEN = os.getenv("VK_USER_TOKEN") or "YOUR_TOKEN_HERE"
+# USING OR STATEMENT MAY BE UNSAFE IF YOU ARE WANT TO CONTRIBUTE TO THIS PROJECT.
+# PLEASE USE OS ENVIRONMENT TO SET YOUR USER TOKEN.
+
+# Should exclude all where we kicked or left? (Overrides settings below).
+EXCLUDE_NO_ACCESS = False
+
+# Exclude left chats.
+EXCLUDE_LEFT = False
+
+# Exclude kicked chats.
+EXCLUDE_KICKED = True
+
+# In this mode there is only title, link, admin shown.
+LINKS_MODE = False
+
+# Send ALL values that you don't even need? (Photo, notifications is enabled,
+VERBOSE = False
+
+# Prefix for messages.
+MESSAGE_PREFIX = "[VK Chats Scanner] "
+
+# Chunk size (Change only if already used and know what is that).
+CHUNK_SIZE = 10
+
+
+# API Functions.
+
+# VK API Method send message.
+def vkapi_send_messages(_peer_index, _message, _prefix=MESSAGE_PREFIX):
+    # Returning.
+    return _vkapi_connection.method("messages.send", {
+        "random_id": vk_api.utils.get_random_id(),
+        "peer_id": _peer_index,
+        "message": _prefix + _message
     })
 
 
-def get_profile_id():
-    return API_CONNECTION.method("account.getProfileInfo")["id"]
+# VK API Method get user id (of the token, to get peer with self).
+def vkapi_get_user_id() -> int:
+    # Returning.
+    return _vkapi_connection.method("account.getProfileInfo")["id"]
 
 
-def format_peer_information(peer_info):
-    print(f"Данные беседы {peer_info}")
-    peer_title = peer_info["title"]
-    peer_admin = "@id" + str(peer_info["admin_id"])
-    peer_members = peer_info["members_count"]
-    peer_id = peer_info["id"]
-    peer_users = str(peer_info["users"])
-    peer_kicked = peer_info["kicked"] if "kicked" in peer_info else 0
-    return f"Title: {peer_title}, Admin: {peer_admin}, Members: {peer_members}, {'[KICKED]' if peer_kicked else '[ vk.com/im?sel=' + str(2000000000 + peer_id) + ' ]'}\n"  # Formatting.
-
-
-def api_get_peer_data(peer_id):
-    return API_CONNECTION.method("messages.getChat", {
-        "random_id": get_random_id(),
-        "chat_id": peer_id,
+# VK API Method that gets chat information.
+def vkapi_get_chat(_chat_id) -> dict:
+    # Returning.
+    return _vkapi_connection.method("messages.getChat", {
+        "chat_id": _chat_id
     })
 
 
-if __name__ == "__main__":
-    total_count = 0
-    only_kicked = False
-    API_TOKEN = "c9c698739db51483b4e03a61e47f258191a183ab53524dd292c7138bbba91074d4d016cb66ca3486d1a8f"  # Getting user token from environment variable.
-    API_CONNECTION = vk_api.VkApi(token=API_TOKEN)
-    API_LONGPOOL = vk_api.longpoll.VkLongPoll(API_CONNECTION)
-    USER_ID = get_profile_id()
-    api_send_message(USER_ID, "[PeerScaner] Scanning of the peers started.")
-    current_peer_id = 0
-    current_result = ""
+# Function that parses chat, removes not used data and returns clean dict.
+def parse_chat(_chat) -> dict:
+    # Returning.
+    return {
+        "id": int(_chat["id"]),
+        "title": str(_chat["title"]),
+        "admin": int(_chat["admin_id"]),
+        "members": int(_chat["members_count"]),
+        "left": bool("left" in _chat),
+        "kicked": bool("kicked" in _chat),
+        "users": bool(_chat["users"]),
+        "notifications": bool(_chat["push_settings"]["sound"] if "push_settings" in _chat else False),
+        "photo": bool("is_default_photo" in _chat)
+    }
+
+
+# Function that formats link to the chat.
+def chat_get_link(_chat_id) -> str:
+    # Returning.
+    return f"[vk.com/im?sel={2000000000 + _chat_id}]"
+
+
+# Function that formats chat information.
+def chat_format_information(_chat) -> str:
+    # Excluding rules.
+    if (_chat["left"] and (EXCLUDE_LEFT or EXCLUDE_NO_ACCESS)) or \
+            (_chat["kicked"] and (EXCLUDE_KICKED or EXCLUDE_NO_ACCESS)):
+        return ""
+
+    # Getting chat title.
+    _chat_title = _chat["title"]
+    _chat_title = f"<{_chat_title}>"
+
+    # Getting chat admin.
+    _chat_admin = _chat["admin"]
+    _chat_admin = f"[*id{_chat_admin} (Admin)]"
+
+    # Getting members.
+    _chat_members = _chat["members"]
+    _chat_members = f"[{_chat_members}/50]" if _chat_members > 0 else ""
+
+    # Getting chat state.
+    _chat_state = "KICKED" if _chat["kicked"] else ("LEFT" if _chat["left"] else "JOINED")
+    _chat_state = f"[{_chat_state}]"
+
+    # Getting link.
+    _chat_link = chat_get_link(_chat["id"])
+
+    if VERBOSE:
+        _chat_photo = _chat["photo"]
+        _chat_notifications = _chat["notifications"]
+        _chat_users = _chat["users"]
+
+    # Returning.
+    if LINKS_MODE:
+        return " ".join([_chat_title, _chat_admin, _chat_link])
+    else:
+        return " ".join([_chat_title, _chat_admin, _chat_members, _chat_state, _chat_link])
+
+
+# Entry point function (Running script).
+def run():
+    # Getting profile peer.
+    _profile_peer = vkapi_get_user_id()
+
+    # Start message.
+    vkapi_send_messages(_profile_peer, "Starting scanning chats...")
+
+    # Already scanned count.
+    _scanned_count = 0
+
+    # Current chat_id for scanning.
+    _current_chat_id = 1
+
+    # Current chunk text.
+    _current_chunk_chats = []
+
+    # Shown count.
+    _shown_count = 0
+
     while True:
-        current_peer_id += 1
-        #try:
-        peer_info = api_get_peer_data(current_peer_id)
-        if "kicked" in peer_info:
-            if bool(int(peer_info["kicked"])) and only_kicked:
-                print("Kicked and passed.")
-                continue
-        current_result += format_peer_information(peer_info)
-        total_count += 1
-        print(total_count % 10)
-        if total_count % 10 == 0:
-            api_send_message(USER_ID, "[PeerScaner]: 10 Results:\n" + current_result)
-            current_result = ""
-        #except Exception as Error:
-        #    if str(Error) == "[100] One of the parameters specified was missing or invalid: chat_id param is incorrect":
-        #        break
-        #    print(f"Ошибка {Error}")
-    api_send_message(USER_ID, f"[PeerScaner] Scanning of the peers ended. (Total {total_count}")
+        # Infinity loop.
+
+        # Getting chat.
+        try:
+            # Getting.
+            _chat = parse_chat(vkapi_get_chat(_current_chat_id))
+        except vk_api.exceptions.ApiError:
+            # If there is an error.
+
+            # Breaking.
+            break
+
+        # Formatting chat.
+        _chat = chat_format_information(_chat)
+
+        # Adding chat to list.
+        if _chat != "":
+            _current_chunk_chats.append(_chat)
+            _shown_count += 1
+
+        # Printing debug.
+        print(f"Processed chat with id {_current_chat_id}")
+
+        # Increasing scanned count.
+        _scanned_count += 1
+
+        # Increasing current chat id.
+        _current_chat_id += 1
+
+        if len(_current_chunk_chats) != 0 and len(_current_chunk_chats) % CHUNK_SIZE == 0:
+            # If this end of the chunk.
+
+            # Sending chunk.
+            vkapi_send_messages(_profile_peer, f"{CHUNK_SIZE} Chats:\n" +
+                                ",\n".join(_current_chunk_chats))
+
+            # Resetting chunk chats.
+            _current_chunk_chats = []
+
+    # Sending chunk.
+    vkapi_send_messages(_profile_peer, f"{len(_current_chunk_chats)} Chats:\n" +
+                        ",\n".join(_current_chunk_chats))
+
+    # End message.
+    vkapi_send_messages(_profile_peer, f"End scanning chats "
+                                       f"(Total {_scanned_count} chats processed and {_shown_count} shown)...")
+
+
+# Entry point.
+if __name__ == "__main__":
+    # If file itself.
+
+    if VK_API_TOKEN == "YOUR_TOKEN_HERE":
+        # If default token passed.
+
+        # Debug message.
+        print("You don't pass any access_token or os.getenv() not return any!")
+
+        # Returning.
+        exit(1)
+
+    # Connecting to the VK API.
+    try:
+        # Trying to connect.
+
+        # Connecting.
+        _vkapi_connection = vk_api.VkApi(token=VK_API_TOKEN)
+    except vk_api.exceptions.ApiError:
+        # If there an error.
+
+        # Error.
+        print(f"Invalid access_token passed! Token: {VK_API_TOKEN}.")
+
+    # Running entry point function.
+    run()
+
+raise SystemExit
