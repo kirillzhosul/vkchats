@@ -26,13 +26,13 @@ EXCLUDE_NO_ACCESS = False
 EXCLUDE_LEFT = False
 
 # Exclude kicked chats.
-EXCLUDE_KICKED = True
+EXCLUDE_KICKED = False
 
 # In this mode there is only title, link, admin shown.
 LINKS_MODE = False
 
 # Send ALL values that you don't even need? (Photo, notifications is enabled,
-VERBOSE = False
+VERBOSE = True
 
 # Prefix for messages.
 MESSAGE_PREFIX = "[VK Chats Scanner] "
@@ -117,13 +117,18 @@ def chat_format_information(_chat) -> str:
 
     if VERBOSE:
         _chat_photo = _chat["photo"]
+        _chat_photo = f"[Photo:{_chat_photo}]"
         _chat_notifications = _chat["notifications"]
+        _chat_notifications = f"[Notifications:{_chat_notifications}]"
         _chat_users = _chat["users"]
+        _chat_users = f"[Users:{_chat_users}]"
 
     # Returning.
     if LINKS_MODE:
         return " ".join([_chat_title, _chat_admin, _chat_link])
     else:
+        if VERBOSE: 
+             return " ".join([_chat_title, _chat_admin, _chat_members, _chat_state, _chat_link, _chat_photo, _chat_notifications, _chat_users])
         return " ".join([_chat_title, _chat_admin, _chat_members, _chat_state, _chat_link])
 
 
