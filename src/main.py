@@ -28,6 +28,9 @@ EXCLUDE_LEFT = False
 # Exclude kicked chats.
 EXCLUDE_KICKED = False
 
+# Exclude joined chats.
+EXCLUDE_JOINED = False
+
 # In this mode there is only title, link, admin shown.
 LINKS_MODE = False
 
@@ -92,10 +95,13 @@ def chat_get_link(_chat_id) -> str:
 # Function that formats chat information.
 def chat_format_information(_chat) -> str:
     # Excluding rules.
-    if (_chat["left"] and (EXCLUDE_LEFT or EXCLUDE_NO_ACCESS)) or \
-            (_chat["kicked"] and (EXCLUDE_KICKED or EXCLUDE_NO_ACCESS)):
+    _left = _chat["left"]
+    _kicked = _chat["kicked"]
+    if (_left and (EXCLUDE_LEFT or EXCLUDE_NO_ACCESS)) or \
+            (_kicked and (EXCLUDE_KICKED or EXCLUDE_NO_ACCESS)) or \
+                (not _left and not _kicked and EXCLUDE_JOINED):
         return ""
-
+        
     # Getting chat title.
     _chat_title = _chat["title"]
     _chat_title = f"<{_chat_title}>"
